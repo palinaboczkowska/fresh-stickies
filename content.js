@@ -1,48 +1,64 @@
-// Fresh Stickies — sticky notes overlaid on Freshdesk/Freshservice pages.
+// Fresh Stickies v2 — SHARED sticky notes overlaid on Freshdesk/Freshservice.
 //
-// Notes are keyed by origin + pathname, so a note belongs to "this page"
-// (e.g. a specific admin section or ticket). FD/FS are SPAs: the URL changes
-// without a page load, so we poll location.href and re-render on change.
-// Storage is chrome.storage.local — personal to this browser profile.
+// Notes live in Supabase (see config.js + supabase/schema.sql) so everyone
+// with the extension sees the same notes on the same page. A note is keyed
+// by origin + pathname. Sync model: straight REST against PostgREST, poll
+// every 8 s, last write wins. The poll never re-renders while you are
+// typing in or dragging a note, so your edit can't be clobbered mid-stroke.
 
 (() => {
-  const STORE_KEY = "stickies";
+  const POLL_MS = 8000;
   let currentPageKey = pageKey();
-  let saveTimer = null;
+  let lastSnapshot = "";
+  let dragging = false;
+  const textTimers = new Map();
 
   function pageKey() {
     return location.origin + location.pathname;
   }
 
-  async function loadAll() {
-    const data = await chrome.storage.local.get(STORE_KEY);
-    return data[STORE_KEY] || {};
+  // ---- Supabase REST ------------------------------------------------------
+
+  function api(path, opts = {}) {
+    return fetch(`${FSTICKY_CONFIG.url}/rest/v1/${path}`, {
+      ...opts,
+      headers: {
+        apikey: FSTICKY_CONFIG.key,
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+      },
+    });
   }
 
-  async function saveNotes(notes) {
-    const all = await loadAll();
-    if (notes.length) {
-      all[currentPageKey] = notes;
-    } else {
-      delete all[currentPageKey];
-    }
-    await chrome.storage.local.set({ [STORE_KEY]: all });
+  async function fetchNotes(key) {
+    const res = await api(
+      `stickies?select=*&page_key=eq.${encodeURIComponent(key)}&order=created_at`
+    );
+    if (!res.ok) throw new Error(`fetch ${res.status}`);
+    return res.json();
   }
 
-  function collectNotesFromDom() {
-    return [...root().querySelectorAll(".fsticky-note")].map((el) => ({
-      id: el.dataset.id,
-      x: parseInt(el.style.left, 10),
-      y: parseInt(el.style.top, 10),
-      text: el.querySelector("textarea").value,
-      createdAt: el.dataset.createdAt,
-    }));
+  function createNote(note) {
+    return api("stickies", {
+      method: "POST",
+      body: JSON.stringify(note),
+    }).catch((e) => console.warn("[fresh-stickies] create failed", e));
   }
 
-  function scheduleSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveNotes(collectNotesFromDom()), 400);
+  function patchNote(id, fields) {
+    return api(`stickies?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }),
+    }).catch((e) => console.warn("[fresh-stickies] update failed", e));
   }
+
+  function deleteNote(id) {
+    return api(`stickies?id=eq.${id}`, { method: "DELETE" }).catch((e) =>
+      console.warn("[fresh-stickies] delete failed", e)
+    );
+  }
+
+  // ---- DOM ----------------------------------------------------------------
 
   function root() {
     let el = document.getElementById("fsticky-root");
@@ -72,11 +88,15 @@
     return ((h / 997) * 5 - 2.5).toFixed(2);
   }
 
+  function editingInProgress() {
+    const active = document.activeElement;
+    return dragging || (active && active.classList?.contains("fsticky-text"));
+  }
+
   function renderNote(note) {
     const el = document.createElement("div");
     el.className = "fsticky-note";
     el.dataset.id = note.id;
-    el.dataset.createdAt = note.createdAt;
     el.style.left = clamp(note.x, 0, window.innerWidth - 60) + "px";
     el.style.top = clamp(note.y, 0, window.innerHeight - 40) + "px";
     el.style.setProperty("--fsticky-tilt", tilt(note.id) + "deg");
@@ -87,10 +107,10 @@
     const close = document.createElement("button");
     close.className = "fsticky-close";
     close.textContent = "✕";
-    close.title = "Ta bort lappen";
+    close.title = "Ta bort lappen (för alla)";
     close.addEventListener("click", () => {
       el.remove();
-      scheduleSave();
+      deleteNote(note.id);
     });
 
     bar.appendChild(close);
@@ -99,7 +119,13 @@
     ta.className = "fsticky-text";
     ta.placeholder = "Skriv här…";
     ta.value = note.text || "";
-    ta.addEventListener("input", scheduleSave);
+    ta.addEventListener("input", () => {
+      clearTimeout(textTimers.get(note.id));
+      textTimers.set(
+        note.id,
+        setTimeout(() => patchNote(note.id, { text: ta.value }), 500)
+      );
+    });
 
     el.appendChild(bar);
     el.appendChild(ta);
@@ -108,6 +134,7 @@
     bar.addEventListener("pointerdown", (e) => {
       if (e.target.closest("button")) return;
       e.preventDefault();
+      dragging = true;
       const startX = e.clientX - el.offsetLeft;
       const startY = e.clientY - el.offsetTop;
       const move = (ev) => {
@@ -117,7 +144,11 @@
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
-        scheduleSave();
+        dragging = false;
+        patchNote(note.id, {
+          x: parseInt(el.style.left, 10),
+          y: parseInt(el.style.top, 10),
+        });
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
@@ -130,36 +161,66 @@
     const btn = document.createElement("button");
     btn.id = "fsticky-launcher";
     btn.textContent = "🗒️";
-    btn.title = "Ny klisterlapp på den här sidan (Fresh Stickies)";
+    btn.title = "Ny klisterlapp på den här sidan — syns för alla (Fresh Stickies)";
     btn.addEventListener("click", () => {
       const n = {
-        id: String(Date.now()) + Math.random().toString(36).slice(2, 7),
+        id: crypto.randomUUID(),
+        page_key: currentPageKey,
         x: Math.round(window.innerWidth / 2 - 110 + Math.random() * 40),
         y: Math.round(window.innerHeight / 3 + Math.random() * 40),
         text: "",
-        createdAt: new Date().toISOString(),
       };
       renderNote(n);
       root().querySelector(`[data-id="${n.id}"] textarea`).focus();
-      scheduleSave();
+      createNote(n);
     });
     root().appendChild(btn);
   }
 
-  async function renderPage() {
+  function renderPage(notes) {
     root().innerHTML = "";
     renderLauncher();
-    const all = await loadAll();
-    for (const note of all[currentPageKey] || []) renderNote(note);
+    for (const note of notes) renderNote(note);
   }
 
-  // SPA navigation: re-render when the URL path changes without a page load.
+  // ---- Sync loop ----------------------------------------------------------
+
+  async function sync(force = false) {
+    if (editingInProgress()) return; // never clobber an edit in progress
+    let notes;
+    try {
+      notes = await fetchNotes(currentPageKey);
+    } catch (e) {
+      console.warn("[fresh-stickies] sync failed", e);
+      return;
+    }
+    const snapshot = JSON.stringify(notes.map((n) => [n.id, n.x, n.y, n.text]));
+    if (force || snapshot !== lastSnapshot) {
+      lastSnapshot = snapshot;
+      renderPage(notes);
+    }
+  }
+
   setInterval(() => {
     if (pageKey() !== currentPageKey) {
       currentPageKey = pageKey();
-      renderPage();
+      lastSnapshot = "";
+      sync(true);
+    } else {
+      sync();
     }
-  }, 800);
+  }, 1000);
 
-  renderPage();
+  // Poll the backend on its own slower cadence; the 1 s loop above only
+  // handles SPA navigation cheaply (no network) via the snapshot short-circuit.
+  let lastPoll = 0;
+  const origSync = sync;
+  sync = async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastPoll < POLL_MS) return;
+    lastPoll = now;
+    return origSync(force);
+  };
+
+  sync(true);
 })();

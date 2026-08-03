@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Fresh Stickies",
+  "version": "0.1.0",
+  "description": "Sticky notes you can place anywhere on Freshdesk/Freshservice pages. Notes stay until removed.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.freshdesk.com/*",
+        "https://*.freshservice.com/*",
+        "https://*.myfreshworks.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

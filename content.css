@@ -1,0 +1,132 @@
+/* Fresh Stickies — all selectors prefixed to avoid colliding with host CSS. */
+
+#fsticky-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* the overlay itself never blocks the page… */
+  z-index: 2147483000;
+}
+
+#fsticky-root > * {
+  pointer-events: auto; /* …only the notes and the launcher do */
+}
+
+#fsticky-launcher {
+  position: fixed;
+  right: 16px;
+  bottom: 76px; /* above FD's own help/chat bubbles */
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #feff9c;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+#fsticky-launcher:hover {
+  opacity: 1;
+}
+
+.fsticky-note {
+  position: fixed;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  /* Classic post-it: pale top edge (the glue strip catches light), warmer body */
+  background: linear-gradient(
+    180deg,
+    #ffffab 0%,
+    #feff9c 12%,
+    #fbf58a 85%,
+    #f5ec78 100%
+  );
+  transform: rotate(var(--fsticky-tilt, 0deg));
+  box-shadow:
+    0 8px 12px -6px rgba(0, 0, 0, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Picked-up feel: straighten and lift while hovering/dragging */
+.fsticky-note:hover {
+  transform: rotate(0deg) scale(1.02);
+  box-shadow:
+    0 14px 20px -8px rgba(0, 0, 0, 0.4),
+    0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Curled bottom-right corner */
+.fsticky-note::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(
+    315deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 48%,
+    #e8dd60 50%,
+    #fdf788 56%,
+    #fffdc9 100%
+  );
+  box-shadow: -2px -2px 3px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.fsticky-bar {
+  display: flex;
+  justify-content: flex-end;
+  height: 22px;
+  flex: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.fsticky-bar:active {
+  cursor: grabbing;
+}
+
+.fsticky-close {
+  border: none;
+  background: none;
+  font-size: 12px;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.45);
+  padding: 4px 8px 0 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.fsticky-note:hover .fsticky-close {
+  opacity: 1;
+}
+
+.fsticky-close:hover {
+  color: #000;
+}
+
+.fsticky-text {
+  flex: 1;
+  margin: 0 12px 14px;
+  border: none;
+  background: transparent;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #40381c;
+}
+
+.fsticky-text::placeholder {
+  color: rgba(64, 56, 28, 0.4);
+}

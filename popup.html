@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      width: 240px;
+      margin: 0;
+      padding: 12px 14px;
+      background: #feff9c;
+      color: #40381c;
+    }
+    h1 {
+      font-size: 13px;
+      margin: 0 0 10px;
+    }
+    label {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin: 8px 0;
+      cursor: pointer;
+      line-height: 1.35;
+    }
+    input {
+      margin-top: 1px;
+    }
+    small {
+      display: block;
+      margin-top: 10px;
+      color: rgba(64, 56, 28, 0.65);
+    }
+  </style>
+</head>
+<body>
+  <h1>🗒️ Fresh Stickies</h1>
+  <label>
+    <input type="checkbox" id="hideOrigin" />
+    <span>Dölj lappar på <b id="originLabel">den här instansen</b></span>
+  </label>
+  <label>
+    <input type="checkbox" id="hideAll" />
+    <span>Dölj lappar överallt</span>
+  </label>
+  <small>Gäller bara din webbläsare — lapparna finns kvar för alla andra och kommer tillbaka när du bockar ur.</small>
+  <script src="popup.js"></script>
+</body>
+</html>

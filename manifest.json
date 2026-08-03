@@ -1,9 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Fresh Stickies",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared sticky notes on Freshdesk/Freshservice pages \u2014 visible to everyone with the extension until removed.",
-  "permissions": [],
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "content_scripts": [
     {
       "matches": [
@@ -23,5 +26,9 @@
   ],
   "host_permissions": [
     "https://mkjdaeqxjhartmzvfgqp.supabase.co/*"
-  ]
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Fresh Stickies \u2014 d\u00f6lj/visa lappar"
+  }
 }

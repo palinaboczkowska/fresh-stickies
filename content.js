@@ -13,6 +13,21 @@
   let dragging = false;
   const textTimers = new Map();
 
+  // Personal "demo mode": hide the whole overlay (notes AND launcher) on this
+  // instance or everywhere. Set from the toolbar popup; local to this browser.
+  function applyHidden(settings) {
+    const s = { hideAll: false, hiddenOrigins: {}, ...(settings || {}) };
+    const hidden = s.hideAll || !!s.hiddenOrigins[location.origin];
+    root().style.display = hidden ? "none" : "";
+  }
+
+  chrome.storage.local.get("settings").then((d) => applyHidden(d.settings));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.settings) {
+      applyHidden(changes.settings.newValue);
+    }
+  });
+
   function pageKey() {
     return location.origin + location.pathname;
   }
